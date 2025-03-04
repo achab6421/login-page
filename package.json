@@ -12,7 +12,8 @@
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
-  "homepage": "https://github.com/achab6421/login-page",
+
+  "homepage": "https://achab6421.github.io/login-page",
   
   "scripts": {
   "start": "react-scripts start",
