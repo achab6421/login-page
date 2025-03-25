@@ -1,7 +1,10 @@
-// src/LoginPage.js
 import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import './LoginPage.css';
-import userData from './userData';  // 引入靜態的 userData 資料
+
+const supabaseUrl = 'https://zwgazubwwjtqjxnhisos.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3Z2F6dWJ3d2p0cWp4bmhpc29zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI5MDEzMDEsImV4cCI6MjA1ODQ3NzMwMX0.YHAN28S3wOawpOL9qkKU-LZ_3R_ijrT4ZgBZPYolJsg';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function LoginPage() {
   const [username, setUsername] = useState('');
@@ -10,26 +13,37 @@ function LoginPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [userList, setUserList] = useState(userData); // 用來顯示所有用戶資料
+  const [userList, setUserList] = useState([]);
 
-  // 重新整理頁面時，清除 localStorage 中的資料，並載入靜態預設資料
   useEffect(() => {
-    // 不從 localStorage 載入資料，而是直接使用 userData
-    setCurrentUser(null);
-    setIsLoggedIn(false);
+    const fetchUsers = async () => {
+      const { data, error } = await supabase.from('users').select('*');
+      if (error) {
+        console.error('Error fetching users:', error);
+      } else {
+        setUserList(data);
+      }
+    };
+
+    fetchUsers();
   }, []);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
-    // 從 userData 中查找用戶
-    const user = userData.find((user) => user.account === username && user.password === password);
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('account', username)
+      .eq('password', password);
 
-    if (user) {
+    if (error) {
+      setErrorMessage('登入錯誤：' + error.message);
+    } else if (data.length > 0) {
       setErrorMessage('');
       setIsLoggedIn(true);
-      setCurrentUser(user);  // 登入後儲存當前用戶資料
-      alert(`登入成功！歡迎，${user.name}`);
+      setCurrentUser(data[0]);
+      alert(`登入成功！歡迎，${data[0].name}`);
     } else {
       setErrorMessage('帳號或密碼錯誤');
     }
@@ -39,24 +53,27 @@ function LoginPage() {
     setEditing(true);
   };
 
-  const handleSaveProfile = () => {
-    // 修改資料後，只更新 currentUser 資料
+  const handleSaveProfile = async () => {
     const updatedUserData = {
       ...currentUser,
       account: username,
       password: password,
-      name: currentUser.name,  // 可以修改 name
+      name: currentUser.name,
     };
 
-    // 更新 userList，這樣顯示的用戶資料就會反映出來
-    const updatedUserList = userList.map(user =>
-      user.account === currentUser.account ? updatedUserData : user
-    );
-    setUserList(updatedUserList); // 更新顯示的資料
+    const { data, error } = await supabase
+      .from('users')
+      .update(updatedUserData)
+      .eq('id', currentUser.id);
 
-    setCurrentUser(updatedUserData);  // 更新當前用戶
-    setEditing(false);
-    alert('資料已更新');
+    if (error) {
+      alert('更新資料錯誤：' + error.message);
+    } else {
+      setUserList(userList.map(user => (user.id === currentUser.id ? updatedUserData : user)));
+      setCurrentUser(updatedUserData);
+      setEditing(false);
+      alert('資料已更新');
+    }
   };
 
   const handleChangeName = (e) => {
@@ -73,15 +90,29 @@ function LoginPage() {
     setPassword('');
   };
 
+  const handleDeleteProfile = async () => {
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', currentUser.id);
+
+    if (error) {
+      alert('刪除資料錯誤：' + error.message);
+    } else {
+      setUserList(userList.filter(user => user.id !== currentUser.id));
+      handleLogout();
+      alert('資料已刪除');
+    }
+  };
+
   return (
-    <div className="login-container">
-      <h2>{isLoggedIn ? '修改資料' : '登入'}</h2>
+    <div className="container mt-5">
+      <h2 className="text-center">{isLoggedIn ? '修改資料' : '登入'}</h2>
       
-      {/* 顯示所有用戶資料 */}
-      <h3>所有用戶資料</h3>
-      <ul>
+      <h3 className="text-center">所有用戶資料</h3>
+      <ul className="list-group mb-3">
         {userList.map((user, index) => (
-          <li key={index}>
+          <li key={index} className="list-group-item">
             <strong>姓名:</strong> {user.name} 
             <strong>帳號:</strong> {user.account} 
             <strong>密碼:</strong> {user.password}<br />
@@ -90,73 +121,81 @@ function LoginPage() {
       </ul>
 
       {isLoggedIn ? (
-        <div>
+        <div className="d-flex justify-content-center">
           {!editing ? (
             <div>
-              <button onClick={handleEditProfile}>修改資料</button>
-              <button onClick={handleLogout}>登出</button>
+              <button className="btn btn-secondary me-2" onClick={handleEditProfile}>修改資料</button>
+              <button className="btn btn-danger me-2" onClick={handleDeleteProfile}>刪除帳號</button>
+              <button className="btn btn-danger" onClick={handleLogout}>登出</button>
             </div>
           ) : (
             <div>
-              <div className="input-group">
-                <label htmlFor="new-username">新的帳號</label>
+              <div className="mb-3">
+                <label htmlFor="new-username" className="form-label">新的帳號</label>
                 <input
                   type="text"
+                  className="form-control"
                   id="new-username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="輸入新的帳號"
                 />
               </div>
-              <div className="input-group">
-                <label htmlFor="new-name">新的姓名</label>
+              <div className="mb-3">
+                <label htmlFor="new-name" className="form-label">新的姓名</label>
                 <input
                   type="text"
+                  className="form-control"
                   id="new-name"
                   value={currentUser.name}
                   onChange={handleChangeName}
                   placeholder="輸入新的姓名"
                 />
               </div>
-              <div className="input-group">
-                <label htmlFor="new-password">新的密碼</label>
+              <div className="mb-3">
+                <label htmlFor="new-password" className="form-label">新的密碼</label>
                 <input
                   type="password"
+                  className="form-control"
                   id="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="輸入新的密碼"
                 />
               </div>
-              <button onClick={handleSaveProfile}>儲存修改</button>
+              <button className="btn btn-primary" onClick={handleSaveProfile}>儲存修改</button>
             </div>
           )}
         </div>
       ) : (
-        <form onSubmit={handleLogin} className="login-form">
-          <div className="input-group">
-            <label htmlFor="username">帳號</label>
-            <input
-              type="text"
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="輸入您的帳號"
-            />
-          </div>
-          <div className="input-group">
-            <label htmlFor="password">密碼</label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="輸入您的密碼"
-            />
-          </div>
-          {errorMessage && <div className="error-message">{errorMessage}</div>}
-          <button type="submit" className="login-btn">登入</button>
-        </form>
+        <div className="d-flex justify-content-center">
+          <form onSubmit={handleLogin} className="login-form">
+            <div className="mb-3">
+              <label htmlFor="username" className="form-label">帳號</label>
+              <input
+                type="text"
+                className="form-control"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="輸入您的帳號"
+              />
+            </div>
+            <div className="mb-3">
+              <label htmlFor="password" className="form-label">密碼</label>
+              <input
+                type="password"
+                className="form-control"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="輸入您的密碼"
+              />
+            </div>
+            {errorMessage && <div className="alert alert-danger">{errorMessage}</div>}
+            <button type="submit" className="btn btn-primary">登入</button>
+          </form>
+        </div>
       )}
     </div>
   );

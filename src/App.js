@@ -1,12 +1,12 @@
 // src/App.js
 import React from 'react';
 import './App.css';
-import LoginPage from './LoginPage';
+import MainPage from './MainPage'; // New import
 
 function App() {
   return (
     <div className="App">
-      <LoginPage />
+      <MainPage /> {/* Render MainPage */}
     </div>
   );
 }
